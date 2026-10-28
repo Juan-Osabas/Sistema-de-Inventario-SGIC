@@ -1,0 +1,26 @@
+# --- Secretos: NUNCA subir a GitHub ---
+.env
+conexion_antiguo.py
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+*.spec
+
+# --- Entornos virtuales ---
+.venv/
+venv/
+env/
+
+# --- Editores / sistema ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Archivos generados por el sistema ---
+reporte_*.pdf
+*.log
