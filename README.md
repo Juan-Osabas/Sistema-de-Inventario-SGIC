@@ -64,26 +64,26 @@ Hecha con **Python**, **PySide6** (interfaz) y **MySQL** (base de datos).
 
    Debe mostrar `OK: conectado a la base de datos '...'`.
 
-## Ejecución
+   ## Ejecución
 
-```bash
-python principal.py
-```
+   ```bash
+   python pagina_principal.py
+   ```
 
-## Estructura del proyecto
+   ## Estructura del proyecto
 
-| Archivo | Descripción |
-|---|---|
-| `principal.py` | Ventana principal, menú y panel de inicio |
-| `productos.py` | Gestión de productos |
-| `categorias.py` | Gestión de categorías |
-| `movimientos.py` | Entradas y salidas de inventario |
-| `alerta.py` | Productos con stock bajo |
-| `report.py` | Reportes, exportación a PDF e impresión |
-| `hilos.py` | Carga de datos en segundo plano (threads) |
-| `conexion.py` | Conexión a MySQL (lee los datos de `.env`) |
-| `estilos.py` | Estilos visuales de la interfaz |
-| `probar_conexion.py` | Comprueba la conexión a la base de datos |
+   | Archivo | Descripción |
+   |---|---|
+   | `pagina_principal.py` | Ventana principal, menú y panel de inicio |
+   | `paginas/productos.py` | Gestión de productos |
+   | `paginas/categorias.py` | Gestión de categorías |
+   | `paginas/movimientos.py` | Entradas y salidas de inventario |
+   | `paginas/alerta.py` | Productos con stock bajo |
+   | `paginas/report.py` | Reportes, exportación a PDF e impresión |
+   | `paginas/conexion.py` | Conexión a MySQL (lee los datos de `.env`) |
+   | `hilo/hilo.py` | Carga de datos en segundo plano (threads) |
+   | `estilos/estilos.py` | Estilos visuales de la interfaz |
+   | `probar_conexion.py` | Comprueba la conexión a la base de datos |
 
 ## Ramas
 
