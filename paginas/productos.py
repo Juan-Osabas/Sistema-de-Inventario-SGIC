@@ -1,5 +1,16 @@
+"""
+Página de Productos.
+
+Permite ver, buscar (por código o nombre) y filtrar por categoría; agregar,
+editar y eliminar productos. Los datos se leen en segundo plano (hilo) y las
+escrituras (INSERT / UPDATE / DELETE) usan una conexión MySQL propia.
+Cuando algo cambia, emite señales para que las demás páginas se actualicen.
+"""
+
+# `sys` se usa solo al ejecutar este archivo directamente (ver el final).
 import sys
 
+# Widgets de PySide6 usados en la tabla, el formulario y los avisos.
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -21,15 +32,20 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QDialogButtonBox,
 )
+# Signal permite avisar a otras páginas; QColor pinta el stock bajo en rojo.
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 
+# ConexionMySQL: escrituras. consultar/Cargador: lecturas en segundo plano.
 from paginas.conexion import ConexionMySQL
 from hilo.hilo import consultar, Cargador
 from estilos.estilos import ESTILO_PRODUCTOS, ESTILO_EDITAR, ESTILO_ELIMINAR
 
+# Primera opción del filtro de categorías (equivale a "sin filtrar").
 TODAS_CATEGORIAS = "Todas las categorías"
 
+# Consulta de lectura: productos + nombre de su categoría. Los alias (AS) dan
+# a las claves del diccionario los nombres que usa toda la aplicación.
 SQL_PRODUCTOS = """
     SELECT
         p.id_producto AS id,
@@ -50,12 +66,20 @@ SQL_PRODUCTOS = """
 
 
 class FormularioProducto(QDialog):
+    """Diálogo para agregar o editar un producto (valida antes de aceptar)."""
+
 
     def __init__(self, categorias, producto=None, parent=None):
+        """
+        `categorias`: nombres para el combo. `producto`: dict a editar (None = nuevo).
+        """
+
 
         super().__init__(parent)
 
+        # None = formulario de alta; un dict = formulario de edición
         self.producto = producto
+        # Aquí quedan los datos validados cuando el usuario pulsa Guardar
         self.datos_producto = None
 
         self.setWindowTitle(
@@ -80,6 +104,7 @@ class FormularioProducto(QDialog):
         formulario = QFormLayout()
         formulario.setSpacing(12)
 
+        # Campos del formulario (cada uno se agrega con su etiqueta)
         self.codigo = QLineEdit()
         self.codigo.setPlaceholderText("Ej. 001")
         formulario.addRow("Código:", self.codigo)
@@ -115,6 +140,7 @@ class FormularioProducto(QDialog):
 
         layout.addLayout(formulario)
 
+        # Botones Guardar / Cancelar (con el texto en español)
         botones = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save
             | QDialogButtonBox.StandardButton.Cancel
@@ -127,6 +153,7 @@ class FormularioProducto(QDialog):
 
         layout.addWidget(botones)
 
+        # En modo edición se rellenan los campos con los datos actuales
         if producto is not None:
 
             self.codigo.setText(str(producto["codigo"] or ""))
@@ -144,6 +171,8 @@ class FormularioProducto(QDialog):
             self.stock_minimo.setValue(int(producto["stock_minimo"] or 0))
 
     def guardar(self):
+        """Valida los campos; si todo está bien guarda los datos y cierra el diálogo."""
+
 
         datos_producto = {
             "codigo": self.codigo.text().strip(),
@@ -155,6 +184,8 @@ class FormularioProducto(QDialog):
             "stock_minimo": self.stock_minimo.value(),
         }
 
+        # Validaciones: código, nombre, categoría y precio. Si alguna falla se avisa,
+        # se enfoca el campo y el diálogo no se cierra.
         if not datos_producto["codigo"]:
             QMessageBox.warning(
                 self,
@@ -190,13 +221,21 @@ class FormularioProducto(QDialog):
             self.precio.setFocus()
             return
 
+        # Todo correcto: se guardan los datos y se cierra con resultado "Aceptado"
         self.datos_producto = datos_producto
 
         self.accept()
 
 
 class Producto(QMainWindow):
+    """Página de productos: tabla con buscador, filtro por categoría y acciones."""
 
+
+    # Señales (avisos a otras páginas):
+    #   stocks, producto_guardado, producto_eliminado -> un producto cambió
+    #   categorias_cambiadas -> nombres de categorías activas tras actualizarlas
+    #   productos_cargados   -> terminó de cargarse la lista de productos
+    #   regresar_inicio      -> declarada, pero hoy no se usa en ningún lado
     stocks = Signal(dict)
     producto_guardado = Signal(dict)
     producto_eliminado = Signal(dict)
@@ -205,6 +244,8 @@ class Producto(QMainWindow):
     productos_cargados = Signal()
 
     def __init__(self, categorias=None):
+        """Crea la interfaz y lanza la primera carga de productos."""
+
 
         super().__init__()
         self.setStyleSheet(ESTILO_PRODUCTOS)
@@ -212,10 +253,14 @@ class Producto(QMainWindow):
         self.setWindowTitle("Productos")
         self.resize(1000, 650)
 
+        # Categorías entregadas por la ventana principal (dicts o nombres)
         self.categorias = categorias if categorias is not None else []
 
+        # Conexión usada para las escrituras (INSERT / UPDATE / DELETE)
         self.db = ConexionMySQL()
 
+        # `productos` guarda la última lista cargada; el cargador descarta resultados
+        # viejos si llega una consulta más reciente
         self.productos = []
         self._cargador = Cargador()
 
@@ -226,6 +271,7 @@ class Producto(QMainWindow):
         layout_principal.setContentsMargins(25, 25, 25, 25)
         layout_principal.setSpacing(15)
 
+        # Encabezado: título y subtítulo
         layout_encabezado = QVBoxLayout()
 
         titulo = QLabel("Productos")
@@ -244,6 +290,7 @@ class Producto(QMainWindow):
 
         layout_principal.addLayout(layout_encabezado)
 
+        # Barra de búsqueda: texto, filtro por categoría y botón de agregar
         layout_buscar = QHBoxLayout()
 
         label_buscar = QLabel("Buscar Producto:")
@@ -251,9 +298,11 @@ class Producto(QMainWindow):
         self.buscar = QLineEdit()
         self.buscar.setPlaceholderText("Buscar por código o nombre...")
         self.buscar.setClearButtonEnabled(True)
+        # Al escribir se filtra la tabla al instante
         self.buscar.textChanged.connect(self.filtrar_tabla)
 
         self.filtro_categoria = QComboBox()
+        # Llena el combo de categorías
         self.actualizar_categorias()
         self.filtro_categoria.currentTextChanged.connect(self.filtrar_tabla)
 
@@ -267,6 +316,7 @@ class Producto(QMainWindow):
 
         layout_principal.addLayout(layout_buscar)
 
+        # Tabla de productos (solo lectura); la última columna lleva los botones
         self.tabla_productos = QTableWidget()
         self.tabla_productos.setColumnCount(7)
         self.tabla_productos.setHorizontalHeaderLabels([
@@ -305,6 +355,8 @@ class Producto(QMainWindow):
     # Auxiliares
     # ------------------------------------------------------------------
     def _conectar_o_avisar(self):
+        """Abre la conexión; si falla muestra un error y devuelve None."""
+
 
         conexion = self.db.conectar()
 
@@ -338,6 +390,8 @@ class Producto(QMainWindow):
         return cursor.fetchone() is not None
 
     def _producto_por_id(self, id_producto):
+        """Busca en la lista cargada el producto con ese id (o None)."""
+
 
         return next(
             (p for p in self.productos if p["id"] == id_producto),
@@ -345,6 +399,8 @@ class Producto(QMainWindow):
         )
 
     def _emitir_cambio(self, producto):
+        """Avisa a las demás páginas que un producto cambió."""
+
 
         # Evita emitir None, que rompería las señales de tipo dict
         if producto is None:
@@ -354,6 +410,8 @@ class Producto(QMainWindow):
         self.stocks.emit(producto)
 
     def obtener_nombres_categorias(self):
+        """Nombres de las categorías activas (acepta dicts o una lista de nombres)."""
+
 
         if not self.categorias:
             return []
@@ -368,6 +426,11 @@ class Producto(QMainWindow):
         return list(self.categorias)
 
     def actualizar_categorias(self, categorias=None, recargar=True):
+        """
+        Actualiza el combo de filtro conservando la selección actual.
+        `recargar=False` evita volver a consultar los productos.
+        """
+
 
         if categorias is not None:
             self.categorias = categorias
@@ -380,6 +443,7 @@ class Producto(QMainWindow):
             else TODAS_CATEGORIAS
         )
 
+        # blockSignals evita que al rellenar el combo se dispare el filtro varias veces
         self.filtro_categoria.blockSignals(True)
 
         self.filtro_categoria.clear()
@@ -409,6 +473,8 @@ class Producto(QMainWindow):
     # Tabla
     # ------------------------------------------------------------------
     def actualizar_tabla(self):
+        """Vuelve a dibujar la tabla con la lista `self.productos`."""
+
 
         self.tabla_productos.setRowCount(0)
 
@@ -442,6 +508,7 @@ class Producto(QMainWindow):
 
                 self.tabla_productos.setItem(fila, columna, item)
 
+            # Contenedor con los botones Editar y Eliminar de la fila
             contenedor = QWidget()
 
             layout_acciones = QHBoxLayout(contenedor)
@@ -451,6 +518,8 @@ class Producto(QMainWindow):
             btn_editar = QPushButton("Editar")
             btn_eliminar = QPushButton("Eliminar")
 
+            # `p=producto` fija el producto de ESTA fila dentro del lambda (si no, todos
+            # los botones usarían el último producto del ciclo)
             btn_editar.clicked.connect(
                 lambda checked=False, p=producto: self.editar_producto(p)
             )
@@ -466,10 +535,14 @@ class Producto(QMainWindow):
 
             self.tabla_productos.setCellWidget(fila, 6, contenedor)
 
+        # Reaplica la búsqueda y el filtro a las filas recién creadas
         self.filtrar_tabla()
 
     def filtrar_tabla(self, texto=None):
+        """Oculta las filas que no coinciden con el texto buscado o la categoría."""
 
+
+        # Se ignora el parámetro `texto`: siempre se lee el estado actual de los controles
         texto = self.buscar.text().lower().strip()
         categoria = self.filtro_categoria.currentText()
 
@@ -514,6 +587,10 @@ class Producto(QMainWindow):
         )
 
     def _productos_listos(self, productos, al_terminar=None):
+        """
+        Callback (hilo principal): guarda los productos, refresca la tabla y avisa.
+        """
+
 
         # MySQL devuelve Decimal; se pasa a float para usarlo en
         # formularios y formatos sin errores
@@ -529,6 +606,8 @@ class Producto(QMainWindow):
             al_terminar()
 
     def _error_carga_productos(self, mensaje):
+        """Muestra el error si falla la consulta en segundo plano."""
+
 
         QMessageBox.critical(
             self,
@@ -537,6 +616,8 @@ class Producto(QMainWindow):
         )
 
     def agregar_producto(self):
+        """Abre el formulario, valida duplicados y categoría, y hace el INSERT."""
+
 
         categorias = self.obtener_nombres_categorias()
 
@@ -560,9 +641,12 @@ class Producto(QMainWindow):
         if conexion is None:
             return
 
+        # Transacción: si algo falla se hace rollback; la conexión siempre se cierra
+        # en el `finally`
         try:
             cursor = conexion.cursor()
 
+            # No se permiten dos productos con el mismo nombre ni el mismo código
             if self._existe(cursor, "nombre", producto["nombre"]):
                 cursor.close()
                 QMessageBox.warning(
@@ -581,6 +665,7 @@ class Producto(QMainWindow):
                 )
                 return
 
+            # La categoría elegida debe existir y estar activa
             cursor.execute(
                 """
                 SELECT id_categoria
@@ -602,6 +687,7 @@ class Producto(QMainWindow):
                 )
                 return
 
+            # Todo validado: se inserta el producto nuevo con estado "Activo"
             cursor.execute(
                 """
                 INSERT INTO productos
@@ -629,6 +715,7 @@ class Producto(QMainWindow):
                 )
             )
 
+            # Id generado por MySQL; sirve para encontrar el producto tras recargar
             id_nuevo = cursor.lastrowid
 
             conexion.commit()
@@ -660,6 +747,8 @@ class Producto(QMainWindow):
         )
 
     def editar_producto(self, producto):
+        """Abre el formulario con los datos actuales y hace el UPDATE."""
+
 
         categorias = self.obtener_nombres_categorias()
 
@@ -702,6 +791,7 @@ class Producto(QMainWindow):
                 )
                 return
 
+            # Duplicados: se excluye al propio producto para que no choque consigo mismo
             if self._existe(
                 cursor, "nombre", nuevos_datos["nombre"], producto["id"]
             ):
@@ -724,6 +814,7 @@ class Producto(QMainWindow):
                 )
                 return
 
+            # El UPDATE se arma dinámicamente (lista de campos + lista de parámetros)
             campos = [
                 "codigo = %s",
                 "nombre = %s",
@@ -790,6 +881,8 @@ class Producto(QMainWindow):
         )
 
     def eliminar_producto(self, producto):
+        """Pide confirmación y elimina el producto si no tiene movimientos."""
+
 
         respuesta = QMessageBox.question(
             self,
@@ -809,6 +902,7 @@ class Producto(QMainWindow):
         try:
             cursor = conexion.cursor()
 
+            # No se elimina si tiene movimientos: se perdería el historial del inventario
             cursor.execute(
                 """
                 SELECT COUNT(*)
@@ -853,6 +947,7 @@ class Producto(QMainWindow):
         finally:
             self.db.cerrar()
 
+        # Después de recargar la lista se avisa a las demás páginas
         def avisar():
             self.producto_eliminado.emit(producto)
             self.stocks.emit(producto)
@@ -866,10 +961,15 @@ class Producto(QMainWindow):
         )
 
     def actualizar_desde_movimiento(self, datos=None):
+        """
+        Se llama al registrar una entrada o salida: recarga para ver el stock nuevo.
+        """
+
 
         self.cargar_productos()
 
 
+# Permite abrir esta página sola para probarla
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)

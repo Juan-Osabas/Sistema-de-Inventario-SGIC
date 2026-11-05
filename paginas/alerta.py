@@ -1,7 +1,20 @@
+"""
+Página de Alertas.
+
+Muestra todos los productos activos con un estado según su stock:
+  * Stock Bajo       -> stock actual <= stock mínimo
+  * Cerca del mínimo -> hasta MARGEN_CERCA_MINIMO unidades por encima del mínimo
+  * Stock Normal     -> el resto
+Los más urgentes aparecen primero. La tarjeta superior cuenta solo los
+productos en "Stock Bajo".
+"""
+
+# Nota: `sys` está importado dos veces; con un solo import basta.
 import sys
 
 import sys
 
+# Widgets de PySide6 usados en la tarjeta y la tabla.
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -16,10 +29,13 @@ from PySide6.QtWidgets import (
     QTableWidget,
     QHeaderView,
 )
+# Qt: alineaciones. Slot: marca métodos que reciben señales. QColor: colores.
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QColor
 
+# consultar/Cargador: lectura de la base de datos en segundo plano
 from hilo.hilo import consultar, Cargador
+# Hojas de estilo (CSS de Qt) de la página y de la tarjeta indicadora
 from estilos.estilos import (
     ESTILO_PRODUCTOS,
     ESTILO_TITULO,
@@ -33,6 +49,8 @@ from estilos.estilos import (
 # Unidades por encima del stock mínimo en las que se avisa "Cerca del mínimo"
 MARGEN_CERCA_MINIMO = 5
 
+# Consulta de lectura: solo productos activos. Los alias (AS) dan a las
+# claves del diccionario los nombres que usa toda la aplicación.
 SQL_PRODUCTOS = """
     SELECT
         id_producto AS id,
@@ -49,6 +67,7 @@ SQL_PRODUCTOS = """
     ORDER BY id_producto
 """
 
+# Nombres de los tres estados posibles de un producto
 ESTADO_BAJO = "Stock Bajo"
 ESTADO_CERCA = "Cerca del mínimo"
 ESTADO_NORMAL = "Stock Normal"
@@ -62,11 +81,14 @@ COLORES_ESTADO = {
 
 
 class Indicador(QFrame):
+    """Tarjeta con una cifra importante (título, valor grande y descripción)."""
+
 
     def __init__(self, titulo, valor, descripcion):
 
         super().__init__()
 
+        # Los tres textos de la tarjeta (se cambia la cifra con `.valor.setText(...)`)
         self.titulo = QLabel(titulo)
         self.valor = QLabel(valor)
         self.descripcion = QLabel(descripcion)
@@ -88,6 +110,7 @@ class Indicador(QFrame):
         self.setMinimumHeight(130)
         self.setMaximumHeight(160)
 
+        # Estilos de la tarjeta y de cada uno de sus textos
         self.setStyleSheet(ESTILO_INDICADOR_ALERTAS)
         self.titulo.setStyleSheet(ESTILO_INDICADOR_TITULO)
         self.valor.setStyleSheet(ESTILO_INDICADOR_VALOR)
@@ -95,8 +118,15 @@ class Indicador(QFrame):
 
 
 class Alerta(QMainWindow):
+    """Página de alertas: tarjeta con el conteo y tabla de productos por estado."""
+
 
     def __init__(self, productos=None):
+        """
+        Crea la interfaz y lanza la primera carga (el parámetro `productos` no se usa:
+        esta página consulta sus propios datos).
+        """
+
 
         super().__init__()
 
@@ -123,6 +153,7 @@ class Alerta(QMainWindow):
         layout_principal.addWidget(titulo)
         layout_principal.addWidget(subtitulo)
 
+        # Tarjeta con la cantidad de productos con alerta
         layout_indicador = QHBoxLayout()
         layout_indicador.setSpacing(15)
 
@@ -135,6 +166,7 @@ class Alerta(QMainWindow):
         layout_indicador.addWidget(self.indicador_productos)
         layout_principal.addLayout(layout_indicador)
 
+        # Tabla de alertas (solo lectura, una fila seleccionable a la vez)
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(4)
         self.tabla.setHorizontalHeaderLabels([
@@ -180,11 +212,15 @@ class Alerta(QMainWindow):
         )
 
     def _productos_listos(self, productos):
+        """Callback (hilo principal): guarda los productos y dibuja la tabla."""
+
 
         self.productos = productos
         self.alertas()
 
     def _error_carga(self, mensaje):
+        """Muestra el error si falla la consulta en segundo plano."""
+
 
         QMessageBox.warning(
             self,
@@ -194,6 +230,8 @@ class Alerta(QMainWindow):
 
     @staticmethod
     def calcular_estado(stock_actual, stock_minimo):
+        """Devuelve el estado de un producto según su stock actual y su stock mínimo."""
+
 
         if stock_actual <= stock_minimo:
             return ESTADO_BAJO
@@ -207,9 +245,14 @@ class Alerta(QMainWindow):
     # Tabla
     # ------------------------------------------------------------------
     def alertas(self):
+        """
+        Calcula el estado de cada producto, los ordena por urgencia y llena la tabla.
+        """
+
 
         self.tabla.setRowCount(0)
 
+        # Cada registro: (producto, stock actual, stock mínimo, estado)
         registros = []
 
         for producto in self.productos:
@@ -230,6 +273,7 @@ class Alerta(QMainWindow):
             )
         )
 
+        # Solo los productos en "Stock Bajo" cuentan para la tarjeta
         cantidad_alertas = 0
 
         for producto, stock_actual, stock_minimo, estado in registros:
@@ -248,6 +292,7 @@ class Alerta(QMainWindow):
             for item in (item_stock, item_minimo, item_estado):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
+            # Colores del estado (el tercer valor, la prioridad, no se usa aquí)
             fondo, texto, _ = COLORES_ESTADO[estado]
 
             item_estado.setBackground(QColor(fondo))
@@ -262,14 +307,20 @@ class Alerta(QMainWindow):
             self.tabla.setItem(fila, 2, item_minimo)
             self.tabla.setItem(fila, 3, item_estado)
 
+        # Se actualiza la cifra de la tarjeta con el conteo final
         self.indicador_productos.valor.setText(str(cantidad_alertas))
 
     @Slot()
     def actualizar_alertas(self):
+        """
+        Recarga los productos (la ventana principal la llama cuando cambia el stock).
+        """
+
 
         self.cargar_productos()
 
 
+# Permite abrir esta página sola para probarla
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)

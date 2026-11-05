@@ -14,9 +14,11 @@ La clase ConexionMySQL mantiene la misma interfaz de siempre:
     db.cerrar()
 """
 
+# os: variables de entorno. Path: búsqueda del archivo .env
 import os
 from pathlib import Path
 
+# Conector oficial de MySQL para Python
 import mysql.connector
 from mysql.connector import Error
 
@@ -41,6 +43,7 @@ def _buscar_env():
     return None
 
 
+# Ruta del .env encontrado (o None); se calcula una sola vez al importar
 RUTA_ENV = _buscar_env()
 
 
@@ -66,13 +69,17 @@ def _cargar_env():
         os.environ.setdefault(clave, valor)
 
 
+# Al importar este módulo se cargan de una vez las variables del .env
 _cargar_env()
 
 
 class ConexionMySQL:
+    """Guarda los datos de conexión (leídos del entorno) y abre/cierra la conexión."""
+
 
     def __init__(self):
 
+        # Valores por defecto si falta alguna variable (DB_NAME no tiene: es obligatoria)
         self.host = os.getenv("DB_HOST", "localhost")
         self.puerto = int(os.getenv("DB_PORT", "3306"))
         self.usuario = os.getenv("DB_USER", "root")
@@ -82,6 +89,11 @@ class ConexionMySQL:
         self.conexion = None
 
     def conectar(self):
+        """
+        Abre la conexión a MySQL. Devuelve la conexión, o None si falta el .env,
+        falta DB_NAME o el servidor rechaza la conexión.
+        """
+
 
         if RUTA_ENV is None:
             print(
@@ -112,6 +124,8 @@ class ConexionMySQL:
             return None
 
     def cerrar(self):
+        """Cierra la conexión si está abierta (ignora el caso de no haberla abierto)."""
+
 
         if self.conexion is None:
             return
