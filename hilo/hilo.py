@@ -26,6 +26,8 @@ Uso básico:
     )
 """
 
+# Clases de Qt para trabajar con hilos: QRunnable (tarea), QThreadPool (grupo
+# de hilos), Signal/Slot (comunicación con el hilo principal)
 from PySide6.QtCore import (
     QObject,
     QRunnable,
@@ -34,6 +36,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
+# QCursor/QApplication: cursor de espera mientras hay consultas en curso
 from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QApplication
 
@@ -74,7 +77,12 @@ class _Tarea(QRunnable):
         self.puente = puente
 
     def run(self):
+        """
+        Se ejecuta en un hilo del pool: corre la función y emite el resultado o el error.
+        """
 
+
+        # Éxito -> se emite (id, resultado, None). Error -> se emite (id, None, mensaje).
         try:
             resultado = self.funcion()
 
@@ -92,19 +100,27 @@ class _Puente(QObject):
     callbacks nunca se ejecutan en un hilo de trabajo.
     """
 
+    # Señal (id de la tarea, resultado, mensaje de error): pasa del hilo de trabajo
+    # al hilo principal
     listo = Signal(int, object, object)
 
     def __init__(self):
 
         super().__init__()
 
+        # Callbacks pendientes por id de tarea, contador de ids y tareas en curso
         self._callbacks = {}
         self._siguiente = 0
         self._pendientes = 0
 
+        # Qt entrega la señal en el hilo donde vive este objeto (el principal)
         self.listo.connect(self._recibir)
 
     def lanzar(self, funcion, al_terminar, al_error):
+        """
+        Registra los callbacks, activa el cursor de espera y manda la tarea al pool.
+        """
+
 
         self._siguiente += 1
         id_tarea = self._siguiente
@@ -127,6 +143,10 @@ class _Puente(QObject):
 
     @Slot(int, object, object)
     def _recibir(self, id_tarea, resultado, error):
+        """
+        Recibe el resultado en el hilo principal y llama al callback que corresponda.
+        """
+
 
         al_terminar, al_error = self._callbacks.pop(id_tarea, (None, None))
 
@@ -146,6 +166,7 @@ class _Puente(QObject):
             al_terminar(resultado)
 
 
+# Único puente de la aplicación; se crea la primera vez que se necesita
 _puente = None
 
 
@@ -174,7 +195,13 @@ class Cargador:
         self._contador = 0
 
     def cargar(self, funcion, al_terminar, al_error=None):
+        """
+        Lanza la carga; el resultado solo se aplica si sigue siendo la más reciente.
+        """
 
+
+        # Cada llamada sube el contador; un resultado solo vale si su número sigue
+        # siendo el último
         self._contador += 1
         mi_numero = self._contador
 
@@ -190,6 +217,6 @@ class Cargador:
 
 
 def esperar_hilos(milisegundos=5000):
-    """Espera a que terminen las consultas pendientes (úsese al cerrar)."""
+    """Espera a que terminen las consultas pendientes (se usa al cerrar)."""
 
     QThreadPool.globalInstance().waitForDone(milisegundos)

@@ -5,16 +5,16 @@ Para cambiar el aspecto de todo el sistema basta con editar la paleta de
 abajo: cada color se usa en el CSS como $nombre (por ejemplo $primario).
 Todos los nombres ESTILO_* se conservan, así que los demás módulos no
 necesitan cambios.
-
-Paleta base (azul pizarra):
-    #06141B  #11212D  #253745  #4A5C6A  #9BA8AB  #CCD0CF
 """
 
+# Template permite escribir $nombre dentro del CSS y reemplazarlo por un color
 from string import Template
 
 # ----------------------------------------------------------------------
 # Paleta
 # ----------------------------------------------------------------------
+# Diccionario de colores. También se usa desde el código Python
+# (por ejemplo PALETA["primario"] en la ventana principal).
 PALETA = {
     # Marca
     "primario": "#253745",
@@ -58,6 +58,14 @@ PALETA = {
 
     # Barras de desplazamiento
     "scroll": "#9BA8AB",
+
+    # --- Añadidos para el diseño nuevo (derivados de tu paleta) ---
+    "gris_suave": "#E6E9E9",        # botón Cancelar y campos deshabilitados
+    "cabecera_texto": "#253745",    # texto del encabezado de las tablas
+    "cabecera_borde": "#CCD0CF",    # línea bajo el encabezado de las tablas
+    "peligro_hover": "#962E28",     # rojo oscuro (stock crítico)
+    "exito_suave": "#E5F1EC",       # fondo suave del verde
+    "scroll_hover": "#7C8B8F",      # barra de desplazamiento al pasar el cursor
 }
 
 
@@ -69,6 +77,10 @@ def _t(css):
 # ----------------------------------------------------------------------
 # Bloques reutilizables
 # ----------------------------------------------------------------------
+# Bloques reutilizables de CSS: cada uno se combina con "+" en los estilos de
+# cada página.
+#
+# _FUENTE: tipografía base de todos los widgets
 _FUENTE = """
 QWidget {
     font-family: "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
@@ -76,6 +88,7 @@ QWidget {
 }
 """
 
+# _VENTANA: fondo de ventanas y diálogos, y color de las etiquetas
 _VENTANA = """
 QMainWindow {
     background-color: $fondo;
@@ -90,6 +103,7 @@ QLabel {
 }
 """
 
+# _INPUTS: campos de texto, combos y spin boxes (normal, hover, foco y deshabilitado)
 _INPUTS = """
 QLineEdit,
 QComboBox,
@@ -108,7 +122,7 @@ QLineEdit:hover,
 QComboBox:hover,
 QSpinBox:hover,
 QDoubleSpinBox:hover {
-    border: 1px solid $texto_tenue;
+    border: 1px solid $scroll_hover;
 }
 
 QLineEdit:focus,
@@ -122,8 +136,8 @@ QLineEdit:disabled,
 QComboBox:disabled,
 QSpinBox:disabled,
 QDoubleSpinBox:disabled {
-    background-color: $cabecera;
-    color: $texto_tenue;
+    background-color: $gris_suave;
+    color: $texto_suave;
 }
 
 QComboBox QAbstractItemView {
@@ -137,6 +151,7 @@ QComboBox QAbstractItemView {
 }
 """
 
+# _BOTON: botón principal (normal, hover, presionado y deshabilitado)
 _BOTON = """
 QPushButton {
     background-color: $primario;
@@ -157,10 +172,11 @@ QPushButton:pressed {
 
 QPushButton:disabled {
     background-color: $borde;
-    color: $texto_tenue;
+    color: $texto_suave;
 }
 """
 
+# _TABLA: tablas (filas alternadas y encabezado con esquinas redondeadas)
 _TABLA = """
 QTableWidget {
     background-color: $superficie;
@@ -185,10 +201,10 @@ QTableWidget::item:selected {
 
 QHeaderView::section {
     background-color: $cabecera;
-    color: $texto_suave;
+    color: $cabecera_texto;
     padding: 11px 12px;
     border: none;
-    border-bottom: 1px solid $borde;
+    border-bottom: 1px solid $cabecera_borde;
     font-weight: bold;
 }
 
@@ -206,6 +222,7 @@ QTableCornerButton::section {
 }
 """
 
+# _SCROLL: barras de desplazamiento delgadas y sin flechas
 _SCROLL = """
 QScrollBar:vertical {
     background: transparent;
@@ -220,7 +237,7 @@ QScrollBar::handle:vertical {
 }
 
 QScrollBar::handle:vertical:hover {
-    background-color: $texto_suave;
+    background-color: $scroll_hover;
 }
 
 QScrollBar:horizontal {
@@ -236,7 +253,7 @@ QScrollBar::handle:horizontal {
 }
 
 QScrollBar::handle:horizontal:hover {
-    background-color: $texto_suave;
+    background-color: $scroll_hover;
 }
 
 QScrollBar::add-line,
@@ -251,6 +268,7 @@ QScrollBar::sub-page {
 }
 """
 
+# _EXTRAS: tooltips y cuadros de mensaje
 _EXTRAS = """
 QToolTip {
     background-color: $texto;
@@ -290,7 +308,7 @@ QDialogButtonBox QPushButton:pressed {
 }
 
 QDialogButtonBox QPushButton[text="Cancelar"] {
-    background-color: $cabecera;
+    background-color: $gris_suave;
     color: $texto;
 }
 
@@ -299,11 +317,14 @@ QDialogButtonBox QPushButton[text="Cancelar"]:hover {
 }
 """
 
+# _DIALOGO: estilo completo de un diálogo = ventana + campos + botones + extras
 _DIALOGO = _VENTANA + _INPUTS + _BOTONES_DIALOGO + _EXTRAS
 
 # ----------------------------------------------------------------------
 # Ventanas (Productos, Categorías, Movimientos, Alertas, Reportes)
 # ----------------------------------------------------------------------
+# Estilo base de las páginas (fuente, campos, botones, tablas, scroll y extras).
+# Las páginas de Categorías y Movimientos usan este mismo estilo.
 ESTILO_PRODUCTOS = _t(
     _FUENTE + _VENTANA + _INPUTS + _BOTON + _TABLA + _SCROLL + _EXTRAS
 )
@@ -316,9 +337,9 @@ ESTILO_MOVIMIENTOS = ESTILO_PRODUCTOS
 # ----------------------------------------------------------------------
 ESTILO_TITULO = _t("""
 QLabel {
-    font-size: 28px;
+    font-size: 26px;
     font-weight: bold;
-    color: $texto;
+    color: $primario_hover;
 }
 """)
 
@@ -332,10 +353,11 @@ QLabel {
 # ----------------------------------------------------------------------
 # Botones de acción dentro de las tablas (estilo "suave")
 # ----------------------------------------------------------------------
+# ESTILO_EDITAR: botón "Editar" de las tablas de Productos y Categorías
 ESTILO_EDITAR = _t("""
 QPushButton {
     background-color: $primario_suave;
-    color: $primario;
+    color: $primario_hover;
     border: none;
     border-radius: 6px;
     padding: 6px 14px;
@@ -347,6 +369,7 @@ QPushButton:hover {
 }
 """)
 
+# ESTILO_ELIMINAR: botón "Eliminar" de la tabla de Productos
 ESTILO_ELIMINAR = _t("""
 QPushButton {
     background-color: $peligro_suave;
@@ -362,6 +385,7 @@ QPushButton:hover {
 }
 """)
 
+# ESTILO_INACTIVAR: botón "Inactivar / Activar" de la tabla de Categorías
 ESTILO_INACTIVAR = _t("""
 QPushButton {
     background-color: $aviso_suave;
@@ -380,6 +404,7 @@ QPushButton:hover {
 # ----------------------------------------------------------------------
 # Botones Entrada / Salida
 # ----------------------------------------------------------------------
+# ESTILO_ENTRADA: botón de entrada (página Movimientos y acceso rápido del inicio)
 ESTILO_ENTRADA = _t("""
 QPushButton {
     background-color: $exito;
@@ -395,6 +420,7 @@ QPushButton:hover {
 }
 """)
 
+# ESTILO_SALIDA: botón de salida (página Movimientos y acceso rápido del inicio)
 ESTILO_SALIDA = _t("""
 QPushButton {
     background-color: $aviso;
@@ -436,6 +462,7 @@ QLabel {
 }
 """)
 
+# Textos de la tarjeta indicadora: título, valor y descripción
 ESTILO_INDICADOR_TITULO = """
 font-size: 15px;
 font-weight: bold;
@@ -454,23 +481,23 @@ color: rgba(255, 255, 255, 215);
 """
 
 # Estados de stock (texto + fondo)
-ESTILO_ESTADO_STOCK_BAJO = """
-background-color: #F8E9E7;
-color: #9B2C23;
-"""
+ESTILO_ESTADO_STOCK_BAJO = _t("""
+background-color: $peligro_suave;
+color: $peligro;
+""")
 
-ESTILO_ESTADO_CERCA_MINIMO = """
-background-color: #FBF0E4;
-color: #92400E;
-"""
+ESTILO_ESTADO_CERCA_MINIMO = _t("""
+background-color: $aviso_suave;
+color: $aviso;
+""")
 
-ESTILO_ESTADO_STOCK_NORMAL = """
-background-color: #CCD0CF;
-color: #253745;
-"""
+ESTILO_ESTADO_STOCK_NORMAL = _t("""
+background-color: $primario_suave;
+color: $primario_hover;
+""")
 
 # ----------------------------------------------------------------------
-# Indicadores de Reportes e Inicio (degradado azul pizarra)
+# Indicadores de Reportes e Inicio (degradado azul)
 # ----------------------------------------------------------------------
 ESTILO_INDICADOR_REPORTE = _t("""
 QFrame {
@@ -489,6 +516,7 @@ QLabel {
 }
 """)
 
+# Los textos de las tarjetas de Reportes reutilizan los de Alertas
 ESTILO_INDICADOR_TITULO_REPORTE = ESTILO_INDICADOR_TITULO
 ESTILO_INDICADOR_VALOR_REPORTE = ESTILO_INDICADOR_VALOR
 ESTILO_INDICADOR_DESCRIPCION_REPORTE = ESTILO_INDICADOR_DESCRIPCION
@@ -539,7 +567,7 @@ QPushButton:pressed {
 
 QPushButton:disabled {
     background-color: $borde;
-    color: $texto_tenue;
+    color: $texto_suave;
 }
 """)
 
@@ -551,23 +579,52 @@ QMainWindow#ventanaPrincipal {
     background-color: $fondo;
 }
 
+/* ---- Barra lateral ---- */
 QWidget#menuLateral {
     background-color: $menu;
-    border-radius: 16px;
+    border-radius: 18px;
 }
 
-QWidget#menuLateral QLabel {
+/* Marca (logo + nombre del sistema) */
+QLabel#marcaLogo {
+    background-color: $menu_activo;
+    border-radius: 12px;
+    color: #FFFFFF;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+QLabel#marcaTitulo {
+    color: #FFFFFF;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+QLabel#marcaSubtitulo {
+    color: $texto_tenue;
+    font-size: 11px;
+}
+
+/* Línea separadora */
+QFrame#menuLinea {
+    background-color: $menu_hover;
+    border: none;
+}
+
+/* Título de sección ("MENÚ") */
+QLabel#menuSeccion {
     color: $texto_tenue;
     font-size: 11px;
     font-weight: bold;
-    padding: 4px 8px 10px 8px;
+    padding: 8px 12px 4px 12px;
 }
 
+/* Botones de navegación */
 QWidget#menuLateral QPushButton {
     background-color: transparent;
     color: $menu_texto;
     text-align: left;
-    padding: 12px 16px;
+    padding: 12px 14px;
     border: none;
     border-radius: 10px;
     font-size: 14px;
@@ -584,4 +641,231 @@ QWidget#menuLateral QPushButton:checked {
     color: #FFFFFF;
     font-weight: bold;
 }
+
+/* Pie de la barra (fecha) */
+QLabel#menuFechaTitulo {
+    color: $texto_tenue;
+    font-size: 10px;
+    font-weight: bold;
+    padding-left: 4px;
+}
+
+QLabel#menuFecha {
+    color: $menu_texto;
+    font-size: 12px;
+    padding-left: 4px;
+}
 """)
+
+# ----------------------------------------------------------------------
+# Página de inicio: títulos, tarjetas y paneles
+# ----------------------------------------------------------------------
+ESTILO_TITULO_SECCION = _t("""
+QLabel {
+    font-size: 24px;
+    font-weight: bold;
+    color: $primario_hover;
+}
+""")
+
+ESTILO_SUBTITULO_SECCION = _t("""
+QLabel {
+    font-size: 13px;
+    color: $texto_suave;
+}
+""")
+
+# Tarjeta de indicador (KPI): fondo blanco, borde fino y esquinas redondeadas
+ESTILO_TARJETA_INDICADOR = _t("""
+QFrame#tarjetaIndicador {
+    background-color: $superficie;
+    border: 1px solid $borde;
+    border-radius: 16px;
+}
+
+QLabel#tarjetaTitulo {
+    font-size: 13px;
+    font-weight: bold;
+    color: $texto_suave;
+}
+
+QLabel#tarjetaValor {
+    font-size: 32px;
+    font-weight: bold;
+    color: $texto;
+}
+
+QLabel#tarjetaDescripcion {
+    font-size: 12px;
+    color: $texto_suave;
+}
+""")
+
+# Panel contenedor (tarjeta grande que envuelve una tabla)
+ESTILO_PANEL_TARJETA = _t("""
+QFrame#panelTarjeta {
+    background-color: $superficie;
+    border: 1px solid $borde;
+    border-radius: 16px;
+}
+
+QLabel#panelTitulo {
+    font-size: 16px;
+    font-weight: bold;
+    color: $texto;
+}
+
+QLabel#panelSubtitulo {
+    font-size: 12px;
+    color: $texto_suave;
+}
+""")
+
+# La tabla dentro de un panel no necesita su propio borde
+ESTILO_TABLA_EN_TARJETA = """
+QTableWidget {
+    border: none;
+}
+"""
+
+
+
+# ----------------------------------------------------------------------
+# Datos de la página de Reportes (no son estilos)
+# Se importan desde report.py, por eso viven en este archivo.
+# ----------------------------------------------------------------------
+# TODAS_CATEGORIAS: primera opción del combo de categorías (sin filtrar)
+TODAS_CATEGORIAS = "Todas las categorías"
+ 
+# Nombres de las categorías activas, para el combo del reporte
+SQL_CATEGORIAS = """
+    SELECT nombre
+    FROM categorias
+    WHERE estado = 'Activo'
+    ORDER BY nombre
+"""
+ 
+# Productos activos con el nombre de su categoría
+SQL_PRODUCTOS = """
+    SELECT
+        p.id_producto AS id,
+        p.codigo,
+        p.nombre,
+        p.descripcion,
+        p.precio,
+        p.stock_actual AS stock,
+        p.stock_minimo,
+        p.id_categoria,
+        c.nombre AS categoria,
+        p.estado
+    FROM productos p
+    INNER JOIN categorias c
+        ON p.id_categoria = c.id_categoria
+    WHERE p.estado = 'Activo'
+    ORDER BY p.id_producto
+"""
+ 
+# Todos los movimientos con código y nombre de su producto, del más viejo al más nuevo
+SQL_MOVIMIENTOS = """
+    SELECT
+        m.id_movimiento AS id,
+        p.codigo,
+        p.nombre AS producto,
+        m.tipo,
+        m.cantidad,
+        m.precio_unitario AS precio,
+        m.fecha,
+        m.motivo,
+        m.stock_resultante
+    FROM movimientos m
+    INNER JOIN productos p
+        ON m.id_producto = p.id_producto
+    ORDER BY m.id_movimiento
+"""
+ 
+# Estilo propio de la ventana de Reportes (fondo blanco, campos y combos).
+# Se suma a ESTILO_PRODUCTOS.
+ESTILO_VENTANA_REPORTE = """
+    QMainWindow, QWidget {
+        background-color: #FFFFFF;
+        color: #263238;
+    }
+ 
+    QComboBox {
+        background-color: #FFFFFF;
+        color: #263238;
+        border: 1px solid #DCE3EA;
+        border-radius: 6px;
+        padding: 6px 10px;
+        min-height: 24px;
+    }
+ 
+    QComboBox::drop-down {
+        background-color: #FFFFFF;
+        border: none;
+        width: 28px;
+    }
+ 
+    QComboBox QAbstractItemView {
+        background-color: #FFFFFF;
+        color: #263238;
+        border: 1px solid #DCE3EA;
+        selection-background-color: #D9EEF9;
+        selection-color: #263238;
+        outline: none;
+    }
+ 
+    QLineEdit {
+        background-color: #FFFFFF;
+        color: #263238;
+        border: 1px solid #DCE3EA;
+        border-radius: 6px;
+        padding: 6px 8px;
+    }
+ 
+    QLineEdit:focus {
+        border: 1px solid #3498DB;
+    }
+ 
+    QScrollArea, QScrollArea > QWidget > QWidget {
+        background-color: #FFFFFF;
+        border: none;
+    }
+"""
+ 
+ 
+# ----------------------------------------------------------------------
+# Reporte HTML / PDF
+# QTextDocument solo soporta un subconjunto de HTML y CSS (sin flex, grid
+# ni nth-child), por eso se usan tablas y atributos clásicos.
+# ----------------------------------------------------------------------
+ESTILOS_REPORTE = """
+    body { font-family: Arial; font-size: 10pt; color: #2C3E50; }
+    h1 { text-align: center; color: #2C3E50; margin-bottom: 2px; }
+    h2 { color: #2C3E50; margin-top: 18px; margin-bottom: 6px; }
+    .sub { text-align: center; color: #7F8C8D; font-size: 9pt; }
+    th { background-color: #3498DB; color: white; padding: 6px; }
+    td { padding: 5px; }
+    .kpi-valor { font-size: 15pt; font-weight: bold; text-align: center; }
+    .kpi-titulo { font-size: 8pt; color: #7F8C8D; text-align: center; }
+    .nota { font-size: 8pt; color: #7F8C8D; }
+"""
+ 
+# Colores de las filas del reporte HTML: par, impar, stock bajo y totales
+COLOR_FILA_PAR = "#FFFFFF"
+COLOR_FILA_IMPAR = "#F5F7FA"
+COLOR_FILA_STOCK_BAJO = "#FDECEA"
+COLOR_TEXTO_STOCK_BAJO = "#C0392B"
+COLOR_FILA_TOTALES = "#E8EEF4"
+ 
+# (título, clave del registro, alineación)
+COLUMNAS_REPORTE = [
+    ("Producto", "producto", "left"),
+    ("Categoría", "categoria", "left"),
+    ("Stock", "stock", "right"),
+    ("Entradas", "entradas", "right"),
+    ("Salidas", "salidas", "right"),
+    ("Precio", "precio", "right"),
+    ("Venta", "venta", "right"),
+]
+ 

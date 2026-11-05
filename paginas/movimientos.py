@@ -1,5 +1,16 @@
+"""
+Página de Movimientos (entradas y salidas de inventario).
+
+Muestra el historial de movimientos con búsqueda y filtro por fecha, y permite
+registrar nuevas entradas (compras) y salidas (ventas). Cada registro actualiza
+el stock del producto y guarda el movimiento en una sola transacción. Los
+formularios de entrada y salida son diálogos independientes.
+"""
+
+# `sys` se usa solo al ejecutar este archivo directamente (ver el final).
 import sys
 
+# Widgets de PySide6 usados en la tabla, los formularios y los avisos.
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -21,11 +32,14 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QDialogButtonBox,
 )
+# QDate: manejo de fechas. Signal: avisos a otras páginas. QColor: colores.
 from PySide6.QtCore import Qt, QDate, Signal
 from PySide6.QtGui import QColor
 
+# ConexionMySQL: escrituras. consultar/Cargador: lecturas en segundo plano.
 from paginas.conexion import ConexionMySQL
 from hilo.hilo import consultar, Cargador
+# Hojas de estilo (CSS de Qt) de la página, los botones y los formularios
 from estilos.estilos import (
     ESTILO_MOVIMIENTOS,
     ESTILO_ENTRADA,
@@ -35,9 +49,12 @@ from estilos.estilos import (
     ESTILO_SUBTITULO,
 )
 
+# Colores del texto de la columna "Tipo" en la tabla
 COLOR_ENTRADA = "#27AE60"
 COLOR_SALIDA = "#E67E22"
 
+# Productos activos con su categoría (se usan en los combos de los formularios).
+# Los alias (AS) dan a las claves los nombres que usa toda la aplicación.
 SQL_PRODUCTOS = """
     SELECT
         p.id_producto AS id,
@@ -57,6 +74,7 @@ SQL_PRODUCTOS = """
     ORDER BY p.id_producto
 """
 
+# Historial de movimientos con los datos de su producto, del más nuevo al más viejo
 SQL_MOVIMIENTOS = """
     SELECT
         m.id_movimiento AS id,
@@ -75,6 +93,7 @@ SQL_MOVIMIENTOS = """
 """
 
 
+# (La función siguiente es compartida por los dos formularios)
 def crear_botones(dialogo):
     """Botones Guardar / Cancelar en español, conectados al diálogo."""
 
@@ -92,8 +111,14 @@ def crear_botones(dialogo):
 
 
 class FormularioEntrada(QDialog):
+    """Diálogo para registrar una ENTRADA de producto (compra a proveedor)."""
+
 
     def __init__(self, productos, parent=None):
+        """
+        `productos`: lista de dicts (productos activos) que se ofrecen en el combo.
+        """
+
 
         super().__init__(parent)
         self.setStyleSheet(ESTILO_FORMULARIO_MOVIMIENTO)
@@ -101,6 +126,7 @@ class FormularioEntrada(QDialog):
         self.setWindowTitle("Registrar Entrada")
         self.setModal(True)
 
+        # `datos` queda en None hasta que el usuario guarda con éxito
         self.productos = productos
         self.datos = None
 
@@ -119,6 +145,7 @@ class FormularioEntrada(QDialog):
         formulario = QFormLayout()
         formulario.setSpacing(12)
 
+        # Combo de productos; al cambiar de producto se muestra su stock actual
         self.producto = QComboBox()
 
         for producto in self.productos:
@@ -134,6 +161,7 @@ class FormularioEntrada(QDialog):
         self.cantidad.setRange(1, 999999)
         formulario.addRow("Cantidad:", self.cantidad)
 
+        # En una entrada el precio de compra se escribe a mano
         self.precio = QDoubleSpinBox()
         self.precio.setRange(0.01, 999999999.99)
         self.precio.setDecimals(2)
@@ -148,9 +176,12 @@ class FormularioEntrada(QDialog):
         layout_principal.addLayout(formulario)
         layout_principal.addWidget(crear_botones(self))
 
+        # Muestra el stock del primer producto al abrir el diálogo
         self.mostrar_stock()
 
     def mostrar_stock(self):
+        """Muestra en la etiqueta el stock actual del producto elegido."""
+
 
         indice = self.producto.currentIndex()
 
@@ -158,6 +189,10 @@ class FormularioEntrada(QDialog):
             self.stock_actual.setText(str(self.productos[indice]["stock"]))
 
     def guardar(self):
+        """
+        Valida producto, precio y motivo; si todo está bien guarda `datos` y cierra.
+        """
+
 
         indice = self.producto.currentIndex()
 
@@ -192,8 +227,14 @@ class FormularioEntrada(QDialog):
 
 
 class FormularioSalida(QDialog):
+    """Diálogo para registrar una SALIDA de producto (venta)."""
+
 
     def __init__(self, productos, parent=None):
+        """
+        `productos`: lista de dicts (productos activos) que se ofrecen en el combo.
+        """
+
 
         super().__init__(parent)
         self.setStyleSheet(ESTILO_FORMULARIO_MOVIMIENTO)
@@ -229,6 +270,7 @@ class FormularioSalida(QDialog):
         self.stock_actual = QLabel("0")
         formulario.addRow("Stock actual:", self.stock_actual)
 
+        # En una salida el precio de venta es el del producto (no se edita)
         self.precio = QLabel("C$ 0.00")
         formulario.addRow("Precio de venta:", self.precio)
 
@@ -249,6 +291,8 @@ class FormularioSalida(QDialog):
         self.mostrar_datos()
 
     def mostrar_datos(self):
+        """Muestra stock y precio del producto elegido y limita la cantidad al stock."""
+
 
         indice = self.producto.currentIndex()
 
@@ -264,6 +308,10 @@ class FormularioSalida(QDialog):
             self.cantidad.setMaximum(max(stock, 1))
 
     def guardar(self):
+        """
+        Valida producto, stock suficiente y motivo; si todo está bien guarda `datos`.
+        """
+
 
         indice = self.producto.currentIndex()
 
@@ -273,6 +321,7 @@ class FormularioSalida(QDialog):
             )
             return
 
+        # No se puede sacar más de lo que hay en existencia
         producto = self.productos[indice]
         cantidad = self.cantidad.value()
 
@@ -304,11 +353,21 @@ class FormularioSalida(QDialog):
 
 
 class Movimientos(QMainWindow):
+    """Página de movimientos: historial filtrable y botones de entrada / salida."""
 
+
+    # Señales:
+    #   movimiento_registrado -> se registró una entrada o salida (lleva el movimiento)
+    #   movimientos_cargados  -> terminó de cargarse el historial
     movimiento_registrado = Signal(dict)
     movimientos_cargados = Signal()
 
     def __init__(self, productos=None):
+        """
+        Crea la interfaz y lanza la carga de productos y movimientos (el parámetro
+        `productos` no se usa: esta página consulta sus propios datos).
+        """
+
 
         super().__init__()
         self.setStyleSheet(ESTILO_MOVIMIENTOS)
@@ -321,8 +380,10 @@ class Movimientos(QMainWindow):
 
         self.db = ConexionMySQL()  # solo para guardar movimientos
 
+        # Un cargador por consulta, para que una no descarte el resultado de la otra
         self._cargador_productos = Cargador()
         self._cargador_movimientos = Cargador()
+        # Evita abrir dos formularios si el usuario hace clic varias veces
         self._abriendo_formulario = False
 
         widget = QWidget()
@@ -341,6 +402,7 @@ class Movimientos(QMainWindow):
         layout_principal.addWidget(titulo)
         layout_principal.addWidget(subtitulo)
 
+        # Barra superior: botones de entrada/salida, búsqueda y filtro por fecha
         layout_buscar = QHBoxLayout()
 
         btn_entrada = QPushButton("+ Entrada")
@@ -360,6 +422,7 @@ class Movimientos(QMainWindow):
         self.buscar.setClearButtonEnabled(True)
         self.buscar.textChanged.connect(self.aplicar_filtros)
 
+        # Filtro por rango de fechas (ver `movimiento_en_rango`)
         self.fecha = QComboBox()
         self.fecha.addItems([
             "Todas las fechas",
@@ -379,6 +442,7 @@ class Movimientos(QMainWindow):
 
         layout_principal.addLayout(layout_buscar)
 
+        # Tabla del historial (solo lectura)
         self.tabla = QTableWidget()
         self.tabla.setColumnCount(8)
         self.tabla.setHorizontalHeaderLabels([
@@ -414,6 +478,8 @@ class Movimientos(QMainWindow):
     # Carga de datos
     # ------------------------------------------------------------------
     def _conectar_o_avisar(self):
+        """Abre la conexión; si falla muestra un error y devuelve None."""
+
 
         conexion = self.db.conectar()
 
@@ -436,6 +502,11 @@ class Movimientos(QMainWindow):
         )
 
     def _productos_listos(self, datos, al_terminar=None):
+        """
+        Callback (hilo principal): guarda los productos con los tipos ya convertidos
+        (precio a float, stock sin NULL).
+        """
+
 
         self.productos = [
             {
@@ -457,6 +528,8 @@ class Movimientos(QMainWindow):
             al_terminar()
 
     def _error_carga_productos(self, mensaje):
+        """Muestra el error si falla la carga de productos y libera el botón."""
+
 
         self._abriendo_formulario = False
 
@@ -476,6 +549,10 @@ class Movimientos(QMainWindow):
         )
 
     def _movimientos_listos(self, datos, al_terminar=None):
+        """
+        Callback (hilo principal): da formato al historial, refresca la tabla y avisa.
+        """
+
 
         self.movimientos = []
 
@@ -483,6 +560,7 @@ class Movimientos(QMainWindow):
 
             fecha = movimiento["fecha"]
 
+            # MySQL devuelve un objeto fecha; se muestra como día-mes-año
             if hasattr(fecha, "strftime"):
                 fecha = fecha.strftime("%d-%m-%Y")
 
@@ -495,6 +573,7 @@ class Movimientos(QMainWindow):
                 "cantidad": movimiento["cantidad"],
                 "stock": movimiento["stock"],
                 "precio": float(movimiento["precio"] or 0),
+                # El usuario es fijo ("Admin"): el sistema todavía no tiene inicio de sesión
                 "usuario": "Admin",
                 "motivo": movimiento["motivo"] or "",
             })
@@ -506,6 +585,8 @@ class Movimientos(QMainWindow):
             al_terminar()
 
     def _error_carga_movimientos(self, mensaje):
+        """Muestra el error si falla la carga del historial."""
+
 
         QMessageBox.critical(
             self,
@@ -517,6 +598,8 @@ class Movimientos(QMainWindow):
     # Tabla
     # ------------------------------------------------------------------
     def actualizar_tabla(self):
+        """Vuelve a dibujar la tabla con la lista `self.movimientos`."""
+
 
         self.tabla.setRowCount(0)
 
@@ -544,6 +627,7 @@ class Movimientos(QMainWindow):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
 
                 if columna == 2:
+                    # Entradas y salidas se distinguen por el color del texto
                     color = (
                         COLOR_ENTRADA
                         if movimiento["tipo"] == "Entrada"
@@ -553,6 +637,7 @@ class Movimientos(QMainWindow):
 
                 self.tabla.setItem(fila, columna, item)
 
+        # Reaplica la búsqueda y el filtro de fecha a las filas nuevas
         self.aplicar_filtros()
 
     # ------------------------------------------------------------------
@@ -571,9 +656,12 @@ class Movimientos(QMainWindow):
         if conexion is None:
             return None
 
+        # Transacción: si algo falla se hace rollback; la conexión siempre se cierra
+        # en el `finally`
         try:
             cursor = conexion.cursor()
 
+            # Entrada: se suma al stock directamente en la base de datos
             if tipo == "Entrada":
                 cursor.execute(
                     """
@@ -583,6 +671,7 @@ class Movimientos(QMainWindow):
                     """,
                     (cantidad, producto["id"])
                 )
+            # Salida: se resta solo si todavía hay suficiente stock (`stock_actual >= cantidad`)
             else:
                 cursor.execute(
                     """
@@ -594,6 +683,7 @@ class Movimientos(QMainWindow):
                     (cantidad, producto["id"], cantidad)
                 )
 
+                # Ninguna fila cambió: otro usuario ya gastó ese stock
                 if cursor.rowcount == 0:
                     conexion.rollback()
                     cursor.close()
@@ -606,6 +696,7 @@ class Movimientos(QMainWindow):
                     )
                     return None
 
+            # Se lee el stock resultante para guardarlo en el historial
             cursor.execute(
                 """
                 SELECT stock_actual
@@ -617,6 +708,7 @@ class Movimientos(QMainWindow):
 
             nuevo_stock = cursor.fetchone()[0]
 
+            # Se registra el movimiento con la fecha de hoy
             cursor.execute(
                 """
                 INSERT INTO movimientos
@@ -661,6 +753,10 @@ class Movimientos(QMainWindow):
             self.db.cerrar()
 
     def _registrar(self, tipo, clase_formulario):
+        """
+        Primer paso de un registro: recarga los productos y luego abre el formulario.
+        """
+
 
         # Evita abrir dos formularios si el usuario hace clic varias veces
         if self._abriendo_formulario:
@@ -675,6 +771,8 @@ class Movimientos(QMainWindow):
         )
 
     def _abrir_formulario(self, tipo, clase_formulario):
+        """Abre el formulario, guarda el movimiento y refresca historial y stock."""
+
 
         self._abriendo_formulario = False
 
@@ -703,14 +801,17 @@ class Movimientos(QMainWindow):
         if nuevo_stock is None:
             return
 
+        # avisar() se ejecuta cuando el historial ya está actualizado
         def avisar():
             # Se emite cuando el historial ya está actualizado
             if self.movimientos:
                 self.movimiento_registrado.emit(self.movimientos[0])
 
+        # Se recargan los productos (stock nuevo) y el historial
         self.cargar_productos()
         self.cargar_movimientos(avisar)
 
+        # Textos del mensaje de confirmación según el tipo de movimiento
         if tipo == "Entrada":
             titulo = "Entrada registrada"
             texto = "una entrada"
@@ -730,15 +831,25 @@ class Movimientos(QMainWindow):
         )
 
     def registrar_entrada(self):
+        """
+        Abre el formulario de entrada (también lo usa el acceso rápido del inicio).
+        """
+
         self._registrar("Entrada", FormularioEntrada)
 
     def registrar_salida(self):
+        """Abre el formulario de salida (también lo usa el acceso rápido del inicio)."""
+
         self._registrar("Salida", FormularioSalida)
 
     # ------------------------------------------------------------------
     # Filtros
     # ------------------------------------------------------------------
     def movimiento_en_rango(self, fecha_movimiento, filtro):
+        """
+        Indica si la fecha (texto dd-MM-yyyy) cae dentro del rango elegido en el combo.
+        """
+
 
         fecha = QDate.fromString(fecha_movimiento, "dd-MM-yyyy")
         hoy = QDate.currentDate()
@@ -774,6 +885,10 @@ class Movimientos(QMainWindow):
         return True
 
     def aplicar_filtros(self, *_):
+        """
+        Muestra solo las filas que cumplen la búsqueda de texto y el filtro de fecha.
+        """
+
 
         texto = self.buscar.text().lower().strip()
         filtro_fecha = self.fecha.currentText()
@@ -802,6 +917,7 @@ class Movimientos(QMainWindow):
             self.tabla.setRowHidden(fila, not mostrar)
 
 
+# Permite abrir esta página sola para probarla
 if __name__ == "__main__":
 
     app = QApplication(sys.argv)
